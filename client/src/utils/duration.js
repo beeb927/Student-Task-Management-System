@@ -1,0 +1,6 @@
+export function formatMinutes(total) {
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  if (!hours) return `${minutes} min`;
+  return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+}

@@ -1,0 +1,21 @@
+Student Task Manager | Complete Sprint 3 source
+
+Extract the ZIP, then open student_task_manager_sprint3/app.
+
+If you already tested Sprint 3 on your computer:
+- Use your existing server/.env in this copy.
+- Keep using your existing MySQL database.
+
+If you are upgrading a database from the original ZIP:
+- Run database/migration_sprint3.sql in MySQL using SOURCE and the full file path.
+
+For a fresh database and configuration:
+- Run database/schema.sql in MySQL.
+- Copy server/.env.example to server/.env and fill in your local settings.
+
+From app/server, run npm ci and then npm start.
+In a second terminal, from app/client, run npm ci and then npm run dev.
+Open http://localhost:5173.
+
+See README.md for more setup and testing details. This ZIP contains source
+files and setup scripts. Local MySQL data and credentials are kept separately.
