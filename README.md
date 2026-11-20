@@ -1,6 +1,6 @@
 # Student Task Management System
 
-A full-stack student planner built by a three-person team for CPS714. The app uses React (Vite), Node.js, Express, and MySQL.
+A full-stack student planner built by a three-person team. The app uses React (Vite), Node.js, Express, and MySQL.
 
 ## What is in this version
 **Sprint 1 (core task management)**
