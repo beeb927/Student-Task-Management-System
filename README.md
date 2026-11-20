@@ -2,6 +2,12 @@
 
 A full-stack student planner built by a three-person team. The app uses React (Vite), Node.js, Express, and MySQL.
 
+The Student Task Management System is a full-stack web app built by a three-person team over four Agile sprints. It gives students one place to organize assignments by course, track deadlines and priorities, log sleep, and monitor progress toward daily and weekly study targets.
+
+The app automatically finds open calendar blocks for study sessions around existing commitments. When a student marks a session as missed or partially complete, the scheduler reallocates the remaining study time.
+
+The frontend uses React and Vite, with responsive layouts designed in Figma. The backend uses Node.js and Express REST APIs backed by MySQL. Students can attach images to tasks and preview them on the dashboard. Attachments are saved in S3-compatible storage, with access limited to the task owner. The project includes a local S3 emulator for development.
+
 ## What is in this version
 **Sprint 1 (core task management)**
 - Register, login, logout, JWT cookie sessions
