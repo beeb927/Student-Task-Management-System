@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import SubtaskProgress from "../components/SubtaskProgress";
 import { getTask, getChecklist, addChecklistItem, updateChecklistItem, deleteChecklistItem } from "../services/api";
 
 function TaskChecklist() {
@@ -9,6 +10,7 @@ function TaskChecklist() {
   const [items, setItems] = useState([]);
   const [newTitle, setNewTitle] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async (isCurrent = () => true) => {
     try {
@@ -30,35 +32,33 @@ function TaskChecklist() {
     return () => { active = false; };
   }, [loadData]);
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  const saveChecklist = async (action, fallbackError) => {
+    setSaving(true);
     try {
+      await action();
+      await loadData();
+    } catch (err) {
+      setError(err.response?.data?.message || fallbackError);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (saving || !newTitle.trim()) return;
+    return saveChecklist(async () => {
       await addChecklistItem(id, newTitle.trim());
       setNewTitle("");
-      loadData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Could not add item.");
-    }
+    }, "Could not add item.");
   };
 
-  const handleToggle = async (item) => {
-    try {
-      await updateChecklistItem(id, item.id, { completed: !item.completed });
-      loadData();
-    } catch {
-      setError("Could not update item status.");
-    }
-  };
+  const handleToggle = (item) =>
+    saveChecklist(() => updateChecklistItem(id, item.id, { completed: !item.completed }),
+      "Could not update item status.");
 
-  const handleDelete = async (itemId) => {
-    try {
-      await deleteChecklistItem(id, itemId);
-      loadData();
-    } catch {
-      setError("Could not remove item.");
-    }
-  };
+  const handleDelete = (itemId) =>
+    saveChecklist(() => deleteChecklistItem(id, itemId), "Could not remove item.");
 
   if (!task || String(task.id) !== id) return error ? <p className="error">{error}</p> : <p>Loading...</p>;
 
@@ -68,6 +68,8 @@ function TaskChecklist() {
         &larr; Back to Dashboard
       </button>
       <h2>Subtasks: {task.title}</h2>
+      <SubtaskProgress completed={items.filter((item) => item.completed).length} total={items.length} />
+      {task.status === "Complete" && <p role="status">Task completed</p>}
       {error && <p className="error">{error}</p>}
 
       <form onSubmit={handleAdd} style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
@@ -76,9 +78,10 @@ function TaskChecklist() {
           placeholder="Add subtask or step..."
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
+          disabled={saving}
           required
         />
-        <button type="submit">Add</button>
+        <button type="submit" disabled={saving}>Add</button>
       </form>
 
       {items.length === 0 ? (
@@ -90,12 +93,13 @@ function TaskChecklist() {
               <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", textDecoration: item.completed ? "line-through" : "none" }}>
                 <input
                   type="checkbox"
+                  disabled={saving}
                   checked={Boolean(item.completed)}
                   onChange={() => handleToggle(item)}
                 />
                 <span style={{ color: item.completed ? "#888" : "inherit" }}>{item.title}</span>
               </label>
-              <button className="danger" onClick={() => handleDelete(item.id)} style={{ padding: "4px 8px", fontSize: "12px" }}>
+              <button className="danger" disabled={saving} onClick={() => handleDelete(item.id)} style={{ padding: "4px 8px", fontSize: "12px" }}>
                 Delete
               </button>
             </li>

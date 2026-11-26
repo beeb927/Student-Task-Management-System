@@ -1,5 +1,26 @@
 const db = require("../config/db");
 
+// Serialize checklist writes for a task so checking the last item and completing
+// its parent happen together, even when several requests arrive concurrently.
+async function withChecklistWrite(userId, taskId, write) {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [tasks] = await connection.query(
+      "SELECT id FROM tasks WHERE id = ? AND user_id = ? FOR UPDATE",
+      [taskId, userId]
+    );
+    const result = tasks.length ? await write(connection) : null;
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function listItems(userId, taskId) {
   const [rows] = await db.query(
     `SELECT
@@ -19,23 +40,19 @@ async function listItems(userId, taskId) {
 }
 
 async function addItem(userId, taskId, title) {
-  const [positionRows] = await db.query(
-    `SELECT
-       COALESCE(MAX(position) + 1, 0) AS next_position
-     FROM task_checklist_items
-     WHERE task_id = ?`,
-    [taskId]
-  );
-  const nextPosition = positionRows[0].next_position;
-
-  const [result] = await db.query(
-    `INSERT INTO task_checklist_items (task_id, title, position)
-     SELECT id, ?, ?
-     FROM tasks
-     WHERE id = ? AND user_id = ?`,
-    [title, nextPosition, taskId, userId]
-  );
-  return result.insertId || null;
+  return withChecklistWrite(userId, taskId, async (connection) => {
+    const [[{ next_position: nextPosition }]] = await connection.query(
+      `SELECT COALESCE(MAX(position) + 1, 0) AS next_position
+       FROM task_checklist_items
+       WHERE task_id = ?`,
+      [taskId]
+    );
+    const [result] = await connection.query(
+      "INSERT INTO task_checklist_items (task_id, title, position) VALUES (?, ?, ?)",
+      [taskId, title, nextPosition]
+    );
+    return result.insertId;
+  });
 }
 
 async function updateItem(userId, taskId, itemId, changes) {
@@ -54,29 +71,38 @@ async function updateItem(userId, taskId, itemId, changes) {
 
   if (fields.length === 0) return 0;
 
-  const [result] = await db.query(
-    `UPDATE task_checklist_items i
-     INNER JOIN tasks t ON t.id = i.task_id
-     SET ${fields.join(", ")}
-     WHERE i.id = ?
-       AND i.task_id = ?
-       AND t.user_id = ?`,
-    [...params, itemId, taskId, userId]
-  );
-  return result.affectedRows;
+  return withChecklistWrite(userId, taskId, async (connection) => {
+    const [result] = await connection.query(
+      `UPDATE task_checklist_items i
+       SET ${fields.join(", ")}
+       WHERE i.id = ? AND i.task_id = ?`,
+      [...params, itemId, taskId]
+    );
+
+    if (result.affectedRows && changes.completed === true) {
+      // A matched item guarantees the checklist is nonempty.
+      await connection.query(
+        `UPDATE tasks
+         SET status = 'Complete'
+         WHERE id = ? AND user_id = ? AND status <> 'Complete'
+           AND NOT EXISTS (
+             SELECT 1 FROM task_checklist_items WHERE task_id = ? AND completed = 0
+           )`,
+        [taskId, userId, taskId]
+      );
+    }
+    return result.affectedRows;
+  });
 }
 
 async function deleteItem(userId, taskId, itemId) {
-  const [result] = await db.query(
-    `DELETE i
-     FROM task_checklist_items i
-     INNER JOIN tasks t ON t.id = i.task_id
-     WHERE i.id = ?
-       AND i.task_id = ?
-       AND t.user_id = ?`,
-    [itemId, taskId, userId]
-  );
-  return result.affectedRows;
+  return withChecklistWrite(userId, taskId, async (connection) => {
+    const [result] = await connection.query(
+      "DELETE FROM task_checklist_items WHERE id = ? AND task_id = ?",
+      [itemId, taskId]
+    );
+    return result.affectedRows;
+  });
 }
 
 module.exports = {

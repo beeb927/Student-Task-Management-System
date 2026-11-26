@@ -163,6 +163,9 @@
 
 .planner-task-content { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; }
 .planner-task-details { display: grid; gap: 7px; min-width: 0; }
+.subtask-progress { display: grid; gap: 4px; width: 100%; max-width: 18rem; font-size: .875rem; }
+.subtask-progress progress { width: 100%; height: 10px; accent-color: var(--planner-green); }
+.planner-section > .subtask-progress { margin-bottom: 1rem; }
 .planner-task-media { display: grid; justify-items: end; gap: 7px; }
 .planner-task-image {
   display: block;
