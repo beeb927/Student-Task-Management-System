@@ -88,6 +88,39 @@ test("tasks: edit, complete, reopen", async () => {
   assert.equal((await call("PATCH", "/tasks/999999/status", { status: "Complete" })).status, 404);
 });
 
+test("subtasks: checking the final item persists parent completion", async () => {
+  const created = await call("POST", "/tasks", { title: "Checklist assignment" });
+  assert.equal(created.status, 201);
+  const taskPath = `/tasks/${created.data.taskId}`;
+  const checklistPath = `${taskPath}/checklist`;
+
+  try {
+    const itemIds = [];
+    for (const title of ["Research", "Outline", "Draft", "Review"]) {
+      const added = await call("POST", checklistPath, { title });
+      assert.equal(added.status, 201);
+      itemIds.push(added.data.itemId);
+    }
+
+    const checkItem = (id) => call("PATCH", `${checklistPath}/${id}`, { completed: true });
+    const updates = await Promise.all(itemIds.slice(0, 3).map(checkItem));
+    updates.forEach((response) => assert.equal(response.status, 200));
+
+    let task = (await call("GET", taskPath)).data.task;
+    assert.equal(task.status, "Incomplete");
+    assert.equal(Number(task.checklist_total), 4);
+    assert.equal(Number(task.checklist_completed), 3);
+
+    assert.equal((await checkItem(itemIds[3])).status, 200);
+    const list = (await call("GET", "/tasks")).data.tasks;
+    task = list.find((entry) => entry.id === created.data.taskId);
+    assert.equal(task.status, "Complete");
+    assert.equal(Number(task.checklist_completed), 4);
+  } finally {
+    await call("DELETE", taskPath);
+  }
+});
+
 test("tasks: delete one and clear completed", async () => {
   const a = (await call("POST", "/tasks", { title: "A" })).data.taskId;
   const b = (await call("POST", "/tasks", { title: "B" })).data.taskId;

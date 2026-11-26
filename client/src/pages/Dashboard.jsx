@@ -1,3 +1,4 @@
+import SubtaskProgress from "../components/SubtaskProgress";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -45,7 +46,6 @@ function TaskCard({ task, onToggle, onDelete, onEdit }) {
             {task.course_code && (task.course_shell_url
               ? <a className="planner-course" href={task.course_shell_url} target="_blank" rel="noreferrer">{task.course_code}</a>
               : <span className="planner-course">{task.course_code}</span>)}
-            {task.checklist_total > 0 && <span className="planner-pill">Subtasks: {task.checklist_completed}/{task.checklist_total}</span>}
           </div>
           <label className="planner-task-title">
             <input type="checkbox" checked={done} onChange={() => onToggle(task)}
@@ -53,6 +53,10 @@ function TaskCard({ task, onToggle, onDelete, onEdit }) {
             <span className="task-title">{task.title}</span>
           </label>
           {task.description && <div className="task-desc">{task.description}</div>}
+          <SubtaskProgress
+            completed={Number(task.checklist_completed ?? 0)}
+            total={Number(task.checklist_total ?? 0)}
+          />
         </div>
         <div className="planner-task-media">
           <span className={`badge priority-${task.priority}`}>{task.priority}</span>
