@@ -1,8 +1,7 @@
 const db = require("../config/db");
 
-// Serialize checklist writes for a task so checking the last item and completing
-// its parent happen together, even when several requests arrive concurrently.
-async function withChecklistWrite(userId, taskId, write) {
+// Lock the parent before changing its status or checklist.
+async function withTaskWrite(userId, taskId, write) {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -40,7 +39,7 @@ async function listItems(userId, taskId) {
 }
 
 async function addItem(userId, taskId, title) {
-  return withChecklistWrite(userId, taskId, async (connection) => {
+  return withTaskWrite(userId, taskId, async (connection) => {
     const [[{ next_position: nextPosition }]] = await connection.query(
       `SELECT COALESCE(MAX(position) + 1, 0) AS next_position
        FROM task_checklist_items
@@ -71,7 +70,20 @@ async function updateItem(userId, taskId, itemId, changes) {
 
   if (fields.length === 0) return 0;
 
-  return withChecklistWrite(userId, taskId, async (connection) => {
+  return withTaskWrite(userId, taskId, async (connection) => {
+    if (changes.completed === false) {
+      await connection.query(
+        `UPDATE tasks
+         SET status = 'Incomplete'
+         WHERE id = ? AND status = 'Complete'
+           AND EXISTS (
+             SELECT 1 FROM task_checklist_items
+             WHERE task_id = ? AND id = ? AND completed = 1
+           )`,
+        [taskId, taskId, itemId]
+      );
+    }
+
     const [result] = await connection.query(
       `UPDATE task_checklist_items i
        SET ${fields.join(", ")}
@@ -96,7 +108,7 @@ async function updateItem(userId, taskId, itemId, changes) {
 }
 
 async function deleteItem(userId, taskId, itemId) {
-  return withChecklistWrite(userId, taskId, async (connection) => {
+  return withTaskWrite(userId, taskId, async (connection) => {
     const [result] = await connection.query(
       "DELETE FROM task_checklist_items WHERE id = ? AND task_id = ?",
       [itemId, taskId]
@@ -106,6 +118,7 @@ async function deleteItem(userId, taskId, itemId) {
 }
 
 module.exports = {
+  withTaskWrite,
   listItems,
   addItem,
   updateItem,

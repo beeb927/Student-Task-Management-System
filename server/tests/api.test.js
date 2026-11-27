@@ -88,7 +88,7 @@ test("tasks: edit, complete, reopen", async () => {
   assert.equal((await call("PATCH", "/tasks/999999/status", { status: "Complete" })).status, 404);
 });
 
-test("subtasks: checking the final item persists parent completion", async () => {
+test("subtasks: completing the parent and toggling its checklist stay in sync", async () => {
   const created = await call("POST", "/tasks", { title: "Checklist assignment" });
   assert.equal(created.status, 201);
   const taskPath = `/tasks/${created.data.taskId}`;
@@ -116,6 +116,38 @@ test("subtasks: checking the final item persists parent completion", async () =>
     task = list.find((entry) => entry.id === created.data.taskId);
     assert.equal(task.status, "Complete");
     assert.equal(Number(task.checklist_completed), 4);
+
+    const uncheckItem = (id) => call("PATCH", `${checklistPath}/${id}`, { completed: false });
+    assert.equal((await uncheckItem(itemIds[3])).status, 200);
+    task = (await call("GET", taskPath)).data.task;
+    assert.equal(task.status, "Incomplete");
+    assert.equal(Number(task.checklist_completed), 3);
+
+    assert.equal((await call("PATCH", `${taskPath}/status`, { status: "Complete" })).status, 200);
+    let checklist = (await call("GET", checklistPath)).data.items;
+    assert.equal(checklist.filter((item) => item.completed).length, 4);
+    task = (await call("GET", taskPath)).data.task;
+    assert.equal(task.status, "Complete");
+    assert.equal(Number(task.checklist_completed), 4);
+
+    assert.equal((await uncheckItem(itemIds[3])).status, 200);
+    const edited = await call("PUT", taskPath, { title: "Edited checklist assignment", status: "Complete" });
+    assert.equal(edited.status, 200);
+    task = (await call("GET", taskPath)).data.task;
+    assert.equal(task.status, "Complete");
+    assert.equal(Number(task.checklist_completed), 4);
+
+    // A completed task from an older version may still have unchecked items.
+    const added = await call("POST", checklistPath, { title: "Extra review" });
+    assert.equal(added.status, 201);
+    assert.equal((await uncheckItem(added.data.itemId)).status, 200);
+    task = (await call("GET", taskPath)).data.task;
+    assert.equal(task.status, "Complete");
+    assert.equal(Number(task.checklist_completed), 4);
+
+    assert.equal((await call("PATCH", `${taskPath}/status`, { status: "Complete" })).status, 200);
+    checklist = (await call("GET", checklistPath)).data.items;
+    assert.equal(checklist.filter((item) => item.completed).length, 5);
   } finally {
     await call("DELETE", taskPath);
   }
