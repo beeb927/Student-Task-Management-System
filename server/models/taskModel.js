@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { withTaskWrite } = require("./taskChecklistModel");
 const { enabled: imagesEnabled } = require("../utils/imageStorage");
 
 // ============================================
@@ -134,7 +135,10 @@ async function updateTask(
     status,
   }
 ) {
-  const [result] = await db.query(
+  return updateTaskAndChecklist(
+    userId,
+    id,
+    status,
     `UPDATE tasks
      SET
        title = ?,
@@ -143,7 +147,7 @@ async function updateTask(
        priority = ?,
        estimated_hours = ?,
        course_id = ?,
-       status = ?
+       status = COALESCE(?, status)
      WHERE id = ?
        AND user_id = ?`,
     [
@@ -153,27 +157,40 @@ async function updateTask(
       priority,
       estimatedHours ?? null,
       courseId || null,
-      status,
+      status ?? null,
       id,
       userId,
     ]
   );
-
-  return result.affectedRows;
 }
 
 // ============================================
 // CHANGE TASK COMPLETION STATUS
 // ============================================
 async function setTaskStatus(userId, id, status) {
-  const [result] = await db.query(
+  return updateTaskAndChecklist(
+    userId,
+    id,
+    status,
     `UPDATE tasks
      SET status = ?
      WHERE id = ?
        AND user_id = ?`,
     [status, id, userId]
   );
-  return result.affectedRows;
+}
+
+async function updateTaskAndChecklist(userId, id, status, sql, params) {
+  return withTaskWrite(userId, id, async (connection) => {
+    const [result] = await connection.query(sql, params);
+    if (status === "Complete") {
+      await connection.query(
+        "UPDATE task_checklist_items SET completed = 1 WHERE task_id = ? AND completed = 0",
+        [id]
+      );
+    }
+    return result.affectedRows;
+  });
 }
 
 // ============================================

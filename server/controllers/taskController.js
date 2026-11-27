@@ -28,8 +28,8 @@ async function parseTaskBody(userId, body, existing = {}) {
     }
   }
 
-  const stat = status || existing.status || "Incomplete";
-  if (!STATUSES.includes(stat)) {
+  const stat = status || undefined;
+  if (stat !== undefined && !STATUSES.includes(stat)) {
     return { error: "Status must be Incomplete or Complete." };
   }
 
